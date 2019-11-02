@@ -1,0 +1,592 @@
+% 7C edit: now allows for .tif files to be read 
+%        - varargin will have values isd,ist,scale at end 
+
+% ctra v. ctr: you may have noticed the extra a 
+%       - WHAT DOES THE A STAND FOR?
+%           - the answer is angle. This is for closer angles, or at least
+%           that's the idea 
+
+%NEW VERSION: 
+% analysis_tr...tr for TRASH
+% if your images are ugly this is a program for YOU
+% all I'm using it for right now are the orientation sliced images
+% orientation edit:
+%   - will form some kind of orientation color graph? may be in different
+%   program
+function [composite_image, original_image,orientation_image,sz,wv1,mean1] = analysis_ctra( varargin )
+
+addpath( genpath( 'C:\Users\chels\Documents\Berkeley\Research\Gabor filtering program' ) ); 
+
+% varargin stuff so that different lattices can be tested and stuff
+%program currently can only accommodate hexagonal lattices(2 lattice
+%angles, 3 interatomic spaces); 
+if nargin<6
+    error( 'Not enough inputs.' ) 
+end
+
+file = varargin{1};
+sze = varargin{2}; 
+
+isd = varargin{end-2}; 
+ist = varargin{end-1}; 
+
+if isd == -1 
+    dm3 = DM3Import_cyedit( file ); 
+    image = dm3.image_data;
+    original_image = image; 
+elseif ist == -1 
+    original_image = im2double( imread( file ) ); 
+    image = original_image; 
+    scale = varargin{end}; 
+end 
+
+laindex = find(strcmpi(varargin, 'lattice_angle')); 
+iasindex = find(strcmpi(varargin, 'interatomic_space')); 
+la_n = iasindex-laindex-1; 
+ias_n = length(varargin)-3-iasindex; 
+% 
+% figure
+% imshow(image,[])
+mean1 = mean(mean(image)); 
+
+
+%error cases 
+if la_n>2 || ias_n>3
+    error( 'Nanocrystal lattice cannot be analyzed by this program.') 
+end 
+
+if la_n==0 || ias_n==0 
+    error( 'Please enter at least one lattice angle and interatomic space size.') 
+end 
+
+if la_n==2 && ias_n==2 
+    error( '3 interatomic space values needed in order to analyze.' ) 
+end 
+
+
+if la_n==1
+    lattice_angle1 = varargin{laindex+1}; 
+    lattice_angle2 = lattice_angle1; 
+elseif la_n==2
+    lattice_angle1 = varargin{laindex+1}; 
+    lattice_angle2 = varargin{laindex+2}; 
+end 
+
+if exist( 'dm3' ) == 1 
+    
+    if ias_n == 1 
+        [wv1,sz] = find_wavelength( dm3, varargin{iasindex+1}, sze ); 
+        wv2 = wv1; 
+        wv3 = 0; 
+        
+        ias1 = varargin{iasindex+1};
+    elseif ias_n == 2
+        [wv1,sz] = find_wavelength( dm3, varargin{iasindex+1}, sze );
+        [wv2,~] = find_wavelength( dm3, varargin{iasindex+2}, sze );
+        wv3 = 0; 
+        
+        ias1 = varargin{iasindex+1}; 
+        ias2 = varargin{iasindex+2};
+    elseif ias_n == 3
+        [wv1,sz] = find_wavelength( dm3, varargin{iasindex+1}, sze );
+        [wv2,~] = find_wavelength( dm3, varargin{iasindex+2}, sze );
+        [wv3,~] = find_wavelength( dm3, varargin{iasindex+3}, sze );
+        
+        ias1 = varargin{iasindex+1}; 
+        ias2 = varargin{iasindex+2}; 
+        ias3 = varargin{iasindex+3}; 
+    end 
+    
+else 
+    
+    if ias_n == 1 
+        wv1 = varargin{iasindex+1}/(scale*20) ; 
+        wv2 = wv1; 
+        wv3 = 0; 
+        sz = (sze/scale) ;
+        
+        ias1 = varargin{iasindex+1}; 
+    elseif ias_n == 2 
+        wv1 = varargin{iasindex+1}/(scale*10); 
+        wv2 = varargin{iasindex+2}/(scale*10) ; 
+        wv3 = 0;
+        sz = (sze/scale) ;
+        
+        ias1 = varargin{iasindex+1}; 
+        ias2 = varargin{iasindex+2}; 
+    elseif ias_n == 3
+        wv1 = varargin{iasindex+1}/(scale*10) ; 
+        wv2 = varargin{iasindex+2}/(scale*10) ; 
+        wv3 = varargin{iasindex+3}/(scale*10) ; 
+        sz = (sze/scale) ;
+        
+        ias1 = varargin{iasindex+1}; 
+        ias2 = varargin{iasindex+2}; 
+        ias3 = varargin{iasindex+3}; 
+    end 
+end 
+
+scale1 = sze/sz; 
+
+[orderedangles]=find_angles2(image,ias1,scale1); 
+orderedangles_rad = deg2rad(orderedangles); 
+
+%% Creating the fftim to check how well the angles are getting picked out 
+[r,c] = size( image );
+
+fft_im_line = make_fftim(original_image); 
+
+% figure
+% imshow(fft_im_line,[])
+% 
+% axis on
+% hold on
+
+[size_or,~] = size(orderedangles); 
+
+% if size_or ~= 1
+%     
+%     for or1 = 1:size_or
+%         m = tan(orderedangles_rad(or1)); 
+%         b = (r/2)-m*(r/2); 
+%         refline(m,b)
+%         axis ([0 r 0 r])
+%     end 
+%     
+% else 
+%     m = tan(orderedangles_rad(1)); 
+%     b = (r/2)-m*(r/2); 
+%     refline(m,b)
+% end 
+% 
+% 
+% axis ([0 r 0 r])
+
+% figure 
+% imshow(original_image,[]) 
+% 
+% axis on
+% hold on 
+% 
+% if size_or ~= 1
+%     
+%     for or1 = 1:size_or
+%         m = tan(orderedangles_rad(or1)); 
+%         b = 256-m*256; 
+%         refline(m,b)
+%     end 
+%     
+% else 
+%     m = tan(orderedangles_rad(1)); 
+%     b = 256-m*256; 
+%     refline(m,b)
+% end 
+% 
+% axis ([0 512 0 512])
+
+%%
+
+a = length( orderedangles ); 
+
+nu_image = ones( r,c );
+positions = cell( a,1 ); 
+positions3 = []; 
+positionor = cell( a,2 ); 
+
+for b = 1:a
+    %create the gabor filters
+    or1 = orderedangles( b ); 
+    or2 = or1+lattice_angle1; 
+    
+    if wv3~=0 %this only happens in the hexagonal case
+        or3 = or1+lattice_angle2; 
+        gb3 = gabor( wv3,or3 ); 
+        
+        %filter the images
+        mag3 = imgaborfilt( image,wv3,or3,'SpatialAspectRatio',0.92 ); 
+
+        %process magnitudes
+        %this might not actually be necessary when we're doing the thing 
+        [pmag3,~] = gabormagprocess( mag3 ); 
+        
+        pmag3bi = imbinarize(pmag3, 0.85); 
+
+        pmag3bit=bwmorph(pmag3bi,'thin',13); 
+
+        pmag3bito=bwmorph(pmag3bit,'open',13); 
+
+        pmag3_cl= clean_imagetr( pmag3bito, sz ); 
+        
+    else 
+        
+        filtim3_cl=0; 
+        
+    end 
+    
+    %% create the inverse fft image 
+    
+    center = size(image)/2 +1; 
+    f = (ias1/10)*(1/scale1); 
+
+    j = size(image,2)/(sqrt(2)*f) + center(2); 
+
+    rmean = sqrt(((center(1)-j)^2)*2); 
+    rmin = (rmean); 
+    rmax = (rmean+10); 
+    
+    [masked_im,masked_fftim] = apply_fftmask(r,0,0,image,or1);
+ %   [masked_im2,masked_fftim2] = apply_fftmask(r,r*0.11,r*0.02,masked_im,or1);
+    [masked_im2,masked_fftim2] = apply_fftmask(r,rmax,rmin,masked_im,or1); %rmax,rmin(may change this later for the sake of less confusion)
+    
+    image = masked_im2; 
+    
+    
+%% PREVIOUSLY USED GABOR FILTERING THINGS FOR ANALYSIS CTRA
+    
+    %filter the images,process magnitudes
+    
+    gb1 = gabor( wv1,-or1,'SpatialAspectRatio',3,'SpatialFrequencyBandwidth',1.25); %IMPORTANT: for this one the or1 must be negative in order to get the correct image
+    %explanation to follow
+    mag1 = imgaborfilt( image,gb1 ); 
+    pmag1 = gabormagprocess( mag1 ); 
+ 
+    %2nd round on processed images
+    mag3 = imgaborfilt( pmag1, wv1,or1 ); %change to gb1
+    pmag3 = gabormagprocess( mag3 ); 
+    
+    mult = pmag3.*pmag1; 
+    
+    binmult = imbinarize(mult,0.25*max(max(mult))); 
+    binmult = double(binmult); 
+    
+    binmult_h = imfill(binmult,'holes');  
+   
+%% Checks: unedited (eccentricity, size?)   
+
+    binmult_h = binmult_h == 1; 
+    binmult_e = bwpropfilt( binmult_h,'Eccentricity',[0 0.9] );
+          
+    low = sz^2*0.2; 
+    high=sz^2; 
+       
+    binmult_s = bwareafilt( binmult_e,[low high] ); 
+    
+%     [dm, ~] = size(filtim3_cl); 
+%     
+%     
+%     
+%     tol = 0.4; 
+%     
+%     if dm>1
+%         [positions3] = trial_extractor( pmag3_cl,tol,'col' ); 
+%     else 
+%         positions3 = []; 
+%     end
+    
+    tol = 0.4; 
+    [positions1] = trial_extractor( binmult_s, tol , 'col');
+%     [positions2] = trial_extractor( pmag2_cl, tol , 'col'); 
+    
+%     positions{b} = [positions1;positions3];
+%     positionor{b,1}=positions1; 
+%     positionor{b,2}=positions2; 
+%     positionor{b,2}=positions2; 
+
+    positions{b} = [positions1];
+%     positionor{b,1}=positions1; 
+%     positionor{b,2}=positions2; 
+%     positionor{b,2}=positions2; 
+    
+    
+end 
+
+%positions = cat( 1,positions{:} ); 
+positions = positions1; 
+nu_image( positions ) = 2; 
+composite = nu_image;
+
+positionor2 = cat(1,positionor{:,2}); 
+positionor_im = zeros(r,c); 
+positionor_im(positionor2)=1; 
+positionor_im = bwmorph(positionor_im,'erode',2); 
+positionor_im = positionor_im==1; 
+positionor2e1a = bwareafilt(positionor_im,[low high]); 
+[positionor2e1] = trial_extractor( positionor2e1a, tol , 'col'); 
+
+orientation_image = create_orimage1( positionor,positionor2e1,orderedangles,lattice_angle1,image ); 
+
+%second round of cleaning as always 
+%cleanliness is second only to GODLINESS
+%gotta convert to b & w as always 
+composite( composite==1 ) = 0;
+composite( composite==2 ) = 1; 
+
+clean3 = clean_imagetr( composite , sz ); 
+%clean31 = bwpropfilt( clean3,'Eccentricity',[0 0.3]); 
+
+%it is finished(with a biblical allegory) 
+
+composite_image = clean3; 
+composite_image = imfill( composite_image,'holes' ); 
+% figure
+% imshowpair( composite_image,image,'diff' )
+
+end
+
+function [fft_im] = make_fftim(image)
+
+ft = fft2( image ); 
+ft = fftshift( ft ); 
+ftmag = abs( ft ); 
+ftmags = log( ftmag+1 ); 
+ftmagbw = mat2gray( ftmags ); 
+
+fft_im = ftmagbw; 
+
+end 
+
+function [orderedangles]=find_angles2(image,ias,scale) 
+
+[a,~] = size(image); 
+
+ftmagbw = make_fftim(image); 
+
+center = size(ftmagbw)/2 +1; 
+f = (ias/10)*(1/scale); 
+
+j = size(ftmagbw,2)/(sqrt(2)*f) + center(2); 
+
+rmean = sqrt(((center(1)-j)^2)*2); 
+rmin = 2*(rmean)/a; 
+rmax = 2*(rmean+10)/a; 
+
+imP = ImToPolar( ftmagbw,rmin,rmax,206,361 ); %rmin before rmax
+
+%adding in a standard deviation to determine where the actual desired areas
+%are, then will only sum over those areas in order to avoid summing the
+%middle parts 
+
+max_std = max(std( imP,[],2 )); 
+maxsp = find( std(imP,[],2)==max_std ); 
+
+rows = sum( imP(maxsp-10:maxsp+10,:) ); 
+org_rows = simple_categorizer( rows ); 
+org_rows2 = org_rows( :,2 )*( 2*pi/361 );
+org_angles = clean_angles2( org_rows2,org_rows(:,1),90 ); 
+
+
+orderedangles = org_angles; 
+
+end 
+function [ clean_im ] = clean_imagetr( array , sz )
+
+%change to binary form
+%convert 2-->0
+%turn from double to logical 
+[ r,c ] = size( array ); 
+
+array( array==2 ) = 0; 
+array = +array; 
+arraybin1 = imbinarize( array ); 
+
+
+%in order to change values by this method, arraybin2 must be double, NOT
+%LOGICAL (change back to double after changing all the values)comp
+arraybin2 = +arraybin1; 
+arraybin2( arraybin2==0 ) = 2; 
+arraybin2( arraybin2==1 ) = 0; 
+arraybin2( arraybin2==2 ) = 1; 
+arraybin2 = logical( arraybin2 ); 
+
+low = sz^2*0.5; 
+high=sz^2 * 5; 
+
+clean1 = bwareafilt( arraybin1,[low high] ); 
+clean2 = bwareafilt( arraybin2,[low high] );
+
+pb1 = sum( sum(clean1==0) )/( r*c ); 
+pb2 = sum( sum(clean2==0) )/( r*c ); 
+
+tol = 0.05;
+
+%if the percent of black in the first cleaned image is really close to 1
+%its probably the one that didn't work 
+if pb1==1
+    clean_im = clean2; 
+else 
+    clean_im = clean1; 
+end 
+
+end 
+function [orientation_image]= create_orimage1(positionor,cleaned_inf,orderedangles,~,image) 
+
+a = length(orderedangles); 
+% orderedangles2 = orderedangles+lattice_angle1; 
+[x,y] = size(image); 
+
+orientation_image = zeros(x,y); 
+
+[b,~] = size(positionor); 
+
+
+for c=1:b
+    
+    nonoccupied_or = orientation_image(positionor{c,1})==0; 
+    available = positionor{c,1}.*nonoccupied_or; 
+    available(available==0)=[]; 
+    orientation_image(available) = orderedangles(c) ; 
+%     orientation_image(positionor{c,2}) = orderedangles2(c) ; 
+    
+end 
+
+% for d=1:b
+    
+    nonoccupied = orientation_image(cleaned_inf)== 0; 
+    infpositions = cleaned_inf.*nonoccupied;
+    infpositions(infpositions==0)=[]; 
+    
+    orientation_image(infpositions) = inf; 
+    
+% end
+
+end 
+
+%remove angles at certain spacings 
+%input angles in rad, not cleaned or rounded 
+%revised for the trash images(clean_angles2):
+%   - now eliminates only when a1=a2+180
+%   - no longer takes out angles for being 90 apart, as or 2 is no longer
+%   utilized above
+function [angle_clean]=clean_angles2( angles ,values ,~ ) 
+
+%radians to degrees, round to nearest 3
+
+angles = rad2deg( angles ); 
+angles = round( angles/2 )*2; 
+
+%create new array to mess with as always
+angle_c = angles; 
+% angle_lattice=angles+lattice_angle; 
+angle_180 = angles+180; 
+
+[r,~] = size( angles ); 
+
+%takes out all the repeating angles
+angle_c = unique( angle_c,'stable' ); 
+
+%check out this sick recursion 
+while sum( angle_c>360 )~=0
+    toobig = find( angle_c>360 ); 
+    %changed angle_c(toobig)-90 to angle_c(toobig)-180 bc orthogonal angles
+    %don't really matter too much in this one? ... more on this later
+    angle_c( toobig ) = angle_c( toobig )-180;
+end 
+
+[size_c,~] = size( angle_c ); 
+a = -12:12; 
+% a180 = a+180; 
+a( a==0 ) = []; 
+% atot = [a a180]; 
+angle_d = angle_c; 
+
+for b=1:size_c
+    
+    if angle_d(b)~= -666
+        
+        bounds = angle_c(b) + a; 
+        bounds_ext = zeros(size_c,24);
+        bounds_ext = bounds_ext(:,:)+bounds; 
+        equals = sum(angle_c == bounds_ext,2); 
+        int_pos = find(equals == 1); 
+        
+        angle_d(int_pos)= -666; 
+        
+    elseif angle_d(b) == -666
+        
+        continue
+        
+    end 
+    
+end 
+
+angle_dclean=angle_d(angle_d~=-666); 
+       
+angle_dclean = unique( angle_dclean,'stable' ); 
+
+%now remove ones on the interval of 180(same angle)
+%could not be done in the previous for loop because some extraneous angles
+%aren't eliminated if they're too close 
+
+[size_d,~] = size(angle_dclean); 
+angle_e = angle_dclean; 
+
+for b1=1:size_d
+    
+    if angle_e(b1)~= -666
+        
+        bounds = angle_dclean(b1) + 180; 
+        bounds_ext = zeros(size_d,1);
+        bounds_ext = bounds_ext(:,:)+bounds; 
+        equals = sum(angle_dclean== bounds_ext,2); 
+        int_pos = find(equals == 1); 
+        
+        angle_e(int_pos)= -666; 
+        
+    elseif angle_e(b1) == -666
+        
+        continue
+        
+    end 
+    
+end 
+
+angle_eclean = unique(angle_e,'stable'); 
+angle_eclean(angle_eclean==-666)=[]; 
+angle_clean = angle_eclean; 
+
+% [size_d,~] = size( angle_dclean ); 
+% angle_positions = zeros( size_d,1 ); 
+
+%finding the positions of the cleaned angles in the old uncleaned array so
+%I can find the values and concatenate them and get rid of the random
+%angles later
+
+% if size_d~=1 
+% 
+%     for d1 = 1:size_d
+% 
+%         pos = find( angles==angle_dclean(d1)); 
+%         [size_p,~] = size(pos); 
+% 
+%         if size_p>1
+%             angle_positions(d1,1) = pos(1); 
+%         else 
+%             angle_positions(d1,1) = pos; 
+%         end 
+% 
+%     end 
+% 
+% elseif size_d == 1 
+%     
+%     pos = find(angles == angle_dclean(1)); 
+%     [~,size_p] = size(pos); 
+%     
+%     if size_p>1
+%         angle_positions(d1,1) = pos(1); 
+%     else
+%         angle_positions(d1,1) = pos;
+%     end 
+%     
+% end 
+% 
+% sel_values = values(angle_positions); 
+% 
+% valuesnangles = [ sel_values,angle_dclean ]; 
+% med_val = median(sel_values); 
+% 
+% valuesnangles(valuesnangles(:,1)<med_val,:) = []; 
+% 
+% %keeping it small bc I don't want to look at all that shit rn
+% angle_clean=valuesnangles(:,2); 
+
+end
